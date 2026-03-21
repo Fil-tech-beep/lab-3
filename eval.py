@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import wandb
 
 from dataset.dataset_and_dataloader import build_dataloaders
 from models.NN_class import CustomNet
@@ -34,6 +35,13 @@ def evaluate(model, val_loader, loss_fn, device):
     val_loss = val_loss / len(val_loader)
     val_accuracy = 100.0 * correct / total
 
+    # keep wandb updated so it keeps track of our model performance
+    wandb.log({
+        "val_loss": val_loss,
+        "val_accuracy": val_accuracy
+    })
+
+
     print(f"Evaluation | Loss: {val_loss:.6f} | Acc: {val_accuracy:.2f}%")
     return val_loss, val_accuracy
 
@@ -57,4 +65,17 @@ if __name__ == "__main__":
 
     loss_fn = nn.CrossEntropyLoss()
 
+    # Start a separate wandb run for evaluation
+    wandb.init(
+        project="lab-3-cnn",
+        name="evaluation",
+        config={
+            "dataset": "TinyImageNet",
+            "checkpoint_path": DEFAULT_CHECKPOINT_PATH
+        }
+    )
+
     evaluate(model, val_loader, loss_fn, device)
+
+    # tell it to fuck off
+    wandb.finish()

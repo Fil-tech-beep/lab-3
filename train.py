@@ -1,6 +1,7 @@
 import os
 import torch
 from torch import nn
+import wandb
 
 from dataset.dataset_and_dataloader import build_dataloaders
 from models.NN_class import CustomNet
@@ -51,6 +52,13 @@ def train(num_epochs, model, train_loader, loss_fn, optimizer, device, save_path
         train_loss = running_loss / len(train_loader)
         train_accuracy = 100.0 * correct / total
 
+        # keep wandb updated on the model scores so that it can keep track of training for us 
+        wandb.log({
+            "epoch": epoch,
+            "train_loss": train_loss,
+            "train_accuracy": train_accuracy
+            })
+
         print(f"Train Epoch: {epoch}/{num_epochs} | Avg loss one epoch: {train_loss:.6f} | Acc: {train_accuracy:.2f}%")
 
 
@@ -94,6 +102,24 @@ if __name__ == "__main__":
         # number of epochs
     num_epochs = 10
 
+    # needed to do the cool plots + track model training with wandb
+    wandb.init(
+        project="lab-3-cnn",
+        config={
+            "epochs": 10,
+            "batch_size": 32,
+            "learning_rate": 0.001,
+            "momentum": 0.9,
+            "optimizer": "SGD",
+            "architecture": "CustomNet",
+            "dataset": "TinyImageNet"
+        }
+    )
+
+    # wandb inspect the model --> track gradients/parameters. NOTE: THIS IS PRETTY HEAVY, COULD BE REMOVED
+    wandb.watch(model, loss_fn, log="all", log_freq=100)
+
+
     train(
         num_epochs=num_epochs,
         model=model,
@@ -103,3 +129,6 @@ if __name__ == "__main__":
         device=device,
         save_path=DEFAULT_CHECKPOINT_PATH
     )
+
+    # tell wandb to fuck off
+    wandb.finish()

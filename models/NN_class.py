@@ -5,27 +5,31 @@ from torch import nn
 class CustomNet(nn.Module):
     def __init__(self):
         '''
-            Define the CNN model
+            Define the CNN model:
+            	•	conv1 (kernel = 3, stride = 1, padding = 1) + relu --> input (3, 224, 224) --> output (64, 224, 224)
+	            •	maxpool (2,2) --> input (64, 224, 224) --> output (64, 112, 112)
+	            •	conv2 + relu --> input (64, 112, 112) --> output (128, 112, 112)
+	            •	maxpool --> input (128, 112, 112) --> output (128, 56, 56)
+	            •	conv3 + relu --> input (128, 56, 56) --> output (256, 56, 56)
+	            •	global avg pool --> input (256, 56, 56) --> output (256, 1, 1)
+	            •	linear --> input 256 * 1 * 1 --> output 200
         '''
         super(CustomNet, self).__init__()
         
-        # Define layers of the neural network
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)       # input (3, 224, 224) --> output (64, 224, 224)
-                                                                      # then --> ReLU
-        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)     # input (64, 224, 224) --> output (128, 224, 224)
-                                                                      # then --> ReLU
-                                                                      # then Maxpooling: (128, 224, 224) --> (128, 112, 112)
+        # Define convolutional layers
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, padding=1)
         
-        # ReLu
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
+
+        # ReLU
         self.relu = nn.ReLU()
 
         # MaxPooling
-        self.Maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # Convolution block 2: (128, 112, 112) --> (256, 112, 112)
-        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)    # input (128, 112, 112) --> output (256, 112, 112)
-                                                                      # then --> ReLU
-                                                                      # then --> Global Average Pooling: (256, 112, 112) --> (256, 1, 1)
+        # Global Average Pooling: force resolution to be (1,1) without changing the channels
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1,1))
 
         # final layer
@@ -38,11 +42,11 @@ class CustomNet(nn.Module):
         # Define forward pass
         x = self.conv1(x)
         x = self.relu(x)
+        x = self.maxpool(x)
 
         x = self.conv2(x)
         x = self.relu(x)
-
-        x = self.Maxpool(x)
+        x = self.maxpool(x)
 
         x = self.conv3(x)
         x = self.relu(x)
@@ -50,7 +54,6 @@ class CustomNet(nn.Module):
 
         # flatten (256, 1, 1) --> (256)
         x = torch.flatten(x, 1)
-
 
         x = self.linear1(x)
 

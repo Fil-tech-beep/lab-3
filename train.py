@@ -1,47 +1,34 @@
-from models.NN_class import CustomNet
-
+import os
 import torch
 from torch import nn
-from torchvision.datasets import ImageFolder
-import torchvision.transforms as T
 
-def train_dataset_and_dataloader():
-    '''
-    Build training dataset + dataloader
-    '''
-
-    transform = T.Compose([
-        T.Resize((224, 224)),  # Resize to fit the input dimensions of the network
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
-
-    # root/{classX}/x001.jpg
-    tiny_imagenet_dataset_train = ImageFolder(root='tiny-imagenet/tiny-imagenet-200/train', transform=transform)
-    train_loader = torch.utils.data.DataLoader(tiny_imagenet_dataset_train, batch_size=32, shuffle=True, num_workers=0)
-
-    
-    return train_loader
-
-
+from dataset.dataset_and_dataloader import build_dataloaders
+from models.NN_class import CustomNet
+from utils.path import DATA_DIR, DEFAULT_CHECKPOINT_PATH
 
 
 def train(num_epochs, model, train_loader, loss_fn, optimizer, device, save_path):
     best_train_acc = 0.0
 
+    # ensure checkpoints folder exists
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
     for epoch in range(1, num_epochs + 1):
         model.train()
+
         running_loss = 0.0
         correct = 0
         total = 0
 
         for inputs, targets in train_loader:
-            # I have a mac --> no cuda
+            # Device handling
+            # I have a mac --> no cuda, but if you run on colab: use cuda
             inputs = inputs.to(device)
             targets = targets.to(device)
 
-
-            # training heart
+            # ------------------------------
+            # Training heart
+            # ------------------------------
             optimizer.zero_grad()
             predictions = model(inputs)
             loss = loss_fn(predictions, targets)
@@ -49,42 +36,70 @@ def train(num_epochs, model, train_loader, loss_fn, optimizer, device, save_path
             optimizer.step()
 
 
+
             running_loss += loss.item()
             predicted = predictions.argmax(dim=1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-            # OR correct += (predicted == targets).sum().item()
+            
+            batch_size = targets.shape[0]
+            num_correct = (predicted == targets).sum().item()
 
+            total += batch_size
+            correct += num_correct
+
+        # finished all batches of 1 epoch
+            # train loss = sum of loss of all batches in 1 epoch / number of batches in one epoch = avg loss each batch over 1 epoch
         train_loss = running_loss / len(train_loader)
         train_accuracy = 100.0 * correct / total
-        best_train_acc = max(best_train_acc, train_accuracy)
 
-        print(f"Train Epoch: {epoch}/{num_epochs} Loss: {train_loss:.6f} Acc: {train_accuracy:.2f}%")
+        print(f"Train Epoch: {epoch}/{num_epochs} | Avg loss one epoch: {train_loss:.6f} | Acc: {train_accuracy:.2f}%")
 
 
-        # save ONLY if better --> Every time the model improves, it overwrites the same file
+        # IF model training accuracy > best training accuracy --> save best TRAIN model in checkpoints
+            # kinda doesn't make sense, it always gets better so it's just like
+            # saving the most recent model but whatever
+                # would be better after the epoch to validate the model (eval.py)
+                    # (so with torch.no_grad() make predictions and compute loss)
+                # on the validation dataset and keep the model with best validation score
         if train_accuracy > best_train_acc:
             best_train_acc = train_accuracy
             torch.save(model.state_dict(), save_path)
-            print("Saved new best model")
-
+            print(f"Saved new best model → {save_path}")
 
     print(f"\nBest training accuracy: {best_train_acc:.2f}%")
-    
     return model
 
 
-
-
-if __name__ == '__main__':
-    train_loader = train_dataset_and_dataloader()
+if __name__ == "__main__":
     
+    # define all the bullshit you need in the training
+        # dataset loading delegated to data/
+    train_loader, val_loader = build_dataloaders(
+        data_root=DATA_DIR,
+        batch_size=32,
+        num_workers=0
+    )
+
+        # device: if CPU or GPU --> you run it on colab so try to use GPU (cuda)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+        # model defined in models/
     model = CustomNet().to(device)
+
+        # loss function
     loss_fn = nn.CrossEntropyLoss()
+
+        # optimizer
     optimizer = torch.optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
+        # number of epochs
     num_epochs = 10
-    save_path = "/Users/filippomontecchi/Desktop/FAIMDL/LAB/L3/lab-3/checkpoints/model.pth"
-    trained_model = train(num_epochs, model, train_loader, loss_fn, optimizer, device, save_path)
-    
+
+    train(
+        num_epochs=num_epochs,
+        model=model,
+        train_loader=train_loader,
+        loss_fn=loss_fn,
+        optimizer=optimizer,
+        device=device,
+        save_path=DEFAULT_CHECKPOINT_PATH
+    )
